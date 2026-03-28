@@ -1,8 +1,9 @@
 /.godot/
 /build/
 /output/
+/node_modules/
+/.wrangler/
 
 # Local OS/editor noise
 .DS_Store
 Thumbs.db
-

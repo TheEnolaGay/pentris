@@ -11,6 +11,7 @@ Update `docs/codex` in the same task whenever any of the following change:
 - scripts or commands used to run, test, or capture the game
 - visual scenarios exposed by `prepare_visual_scenario()`
 - input or control surfaces that affect validation expectations
+- the visual style guide or the intended presentation contract
 - workflow expectations for screenshots, tests, or review artifacts
 - git workflow, versioning, release steps, or tagging conventions
 
@@ -20,9 +21,11 @@ If a workflow change ships without a matching doc update, treat the task as inco
 
 - [workflows.md](/home/bockscar/Git/pentris/docs/codex/workflows.md): canonical run, test, and visual-check commands
 - [pitfalls.md](/home/bockscar/Git/pentris/docs/codex/pitfalls.md): known repo-specific failure cases and recoveries
+- [visual-style-guide.md](/home/bockscar/Git/pentris/docs/codex/visual-style-guide.md): the visual and UI composition contract for NES-inspired retro HUD and menu polish on landscape mobile
 
 ## Rules Of Use
 
 - Prefer exact repo scripts over improvised command variants.
 - Treat visual validation and headless test validation as different workflows.
+- Treat the style guide as authoritative for HUD, menu, layout, panel composition, spacing, and palette decisions unless the task explicitly changes the visual direction.
 - When a command here disagrees with memory, trust the repo-local doc and verify against the referenced script or source.

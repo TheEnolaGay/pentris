@@ -11,8 +11,16 @@ static func run(harness: RefCounted) -> void:
 	_test_camera_swap_transition(harness)
 	_test_visual_capture_presets(harness)
 	_test_camera_fit(harness)
-	_test_queue_preview_helpers(harness)
+	_test_staged_startup(harness)
+	_test_intro_tutorial_activation(harness)
+	_test_intro_tutorial_progression(harness)
+	_test_intro_tutorial_swipe_input_events(harness)
+	_test_next_preview_stage(harness)
 	_test_button_layout_metrics(harness)
+	_test_hud_menu_actions(harness)
+	_test_hud_menu_layout(harness)
+	_test_pause_board_blocks_gameplay(harness)
+	_test_scoreboard_labels(harness)
 	_test_visual_scenarios(harness)
 	_test_open_face_edges(harness)
 	_test_ghost_shadow_projection(harness)
@@ -134,11 +142,8 @@ static func _test_camera_fit(harness: RefCounted) -> void:
 	var controller = ControllerScript.new()
 	var near_spans: Dictionary = controller.projected_board_spans(controller.CAMERA_NEAR_CORNER)
 	var far_spans: Dictionary = controller.projected_board_spans(controller.CAMERA_FAR_CORNER)
-	harness.assert_equal(
-		near_spans,
-		far_spans,
-		"mirrored camera corners should project the board to identical spans"
-	)
+	harness.assert_true(absf(near_spans["width"] - far_spans["width"]) < 0.001, "mirrored camera corners should keep equivalent projected board width")
+	harness.assert_true(absf(near_spans["height"] - far_spans["height"]) < 0.001, "mirrored camera corners should keep equivalent projected board height")
 	var phone_size := controller.camera_size_for_viewport(Vector2(844, 390), controller.CAMERA_NEAR_CORNER)
 	harness.assert_true(
 		phone_size >= near_spans["height"] + controller.CAMERA_FIT_PADDING * 2.0,
@@ -152,18 +157,201 @@ static func _test_camera_fit(harness: RefCounted) -> void:
 	controller.free()
 
 
-static func _test_queue_preview_helpers(harness: RefCounted) -> void:
-	harness.case("queue preview helpers")
+static func _test_staged_startup(harness: RefCounted) -> void:
+	harness.case("staged startup")
 	var controller = ControllerScript.new()
-	var layouts := controller.queue_preview_layout(4, Vector2(120, 200))
-	harness.assert_equal(layouts.size(), 4, "queue preview should create one slot per visible piece")
-	harness.assert_true(layouts[1].position.y > layouts[0].position.y, "queue slots should stack vertically")
-	var block_rects := controller.queue_piece_block_rects([
-		Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(2, 0, 0), Vector3i(1, 0, 1), Vector3i(1, 0, 2)
-	], Rect2(Vector2.ZERO, Vector2(96, 52)))
-	harness.assert_equal(block_rects.size(), 5, "piece preview should emit one rect per block")
-	harness.assert_true(block_rects[0].size.x >= 6.0, "piece preview blocks should stay visible at mobile sizes")
-	harness.assert_true(block_rects[0].position.x >= 0.0 and block_rects[0].position.y >= 0.0, "piece preview should stay inside its slot")
+	controller._ready()
+	harness.assert_true(not controller.startup_complete, "controller should not finish startup synchronously")
+	harness.assert_true(controller.run_state == null, "run state should not exist before startup completes")
+	harness.assert_true(controller.startup_layer != null, "startup shell should exist during staged startup")
+	harness.assert_equal(controller.startup_status_label.text, controller.STARTUP_STATUS_LOADING, "startup shell should expose the initial loading label")
+	controller._finish_startup()
+	harness.assert_true(controller.startup_complete, "startup helper should complete initialization")
+	harness.assert_true(controller.run_state != null, "run state should exist once startup completes")
+	harness.assert_true(controller.startup_layer != null and not controller.startup_layer.visible, "startup shell should hide after initialization")
+	harness.assert_true(controller.tutorial_active, "startup should hand off into the intro tutorial before gameplay begins")
+	controller.free()
+
+
+static func _test_intro_tutorial_activation(harness: RefCounted) -> void:
+	harness.case("intro tutorial activation")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+	harness.assert_true(controller.tutorial_active, "intro tutorial should activate on launch")
+	harness.assert_true(not controller.tutorial_completed, "tutorial should not be marked complete on activation")
+	harness.assert_equal(controller.tutorial_step, 0, "tutorial should begin on the first movement step")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "MOVE DOWN-RIGHT", "tutorial should begin with the first X movement prompt")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↘", "tutorial should show a large directional hint for the first swipe")
+	harness.assert_equal(controller.hud_labels["tutorial_progress"].text, "1/13", "tutorial should expose granular progress for the full checklist")
+	harness.assert_true(not controller.hud_labels["button_menu"].visible, "menu trigger should stay hidden during the tutorial")
+	controller._open_pause_board()
+	harness.assert_true(not controller.pause_board_open, "pause menu should stay unavailable during the tutorial")
+	harness.assert_true(controller._gameplay_locked(), "tutorial should lock gameplay while active")
+	controller.free()
+
+
+static func _test_intro_tutorial_progression(harness: RefCounted) -> void:
+	harness.case("intro tutorial progression")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+	var origin_before: Vector3i = controller.run_state.current_piece["origin"]
+	var movement_blocks_before = controller.run_state.current_piece["blocks"].duplicate(true)
+
+	controller._handle_tutorial_swipe(Vector2(-48, -48), "right")
+	harness.assert_equal(controller.tutorial_step, 0, "wrong first movement direction should not advance the tutorial")
+
+	controller._handle_tutorial_swipe(Vector2(48, 48), "right")
+	harness.assert_equal(controller.tutorial_step, 1, "movement tutorial should advance after the first X swipe")
+	harness.assert_equal(controller.run_state.current_piece["origin"], origin_before + Vector3i(1, 0, 0), "tutorial movement step should move the live piece for feedback")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "MOVE UP-LEFT", "tutorial should move to the opposite X direction next")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↖", "tutorial should flip the hint arrow for the second X swipe")
+
+	controller._handle_tutorial_swipe(Vector2(-48, 48), "right")
+	harness.assert_equal(controller.tutorial_step, 1, "wrong movement axis should not advance the tutorial")
+
+	controller._handle_tutorial_swipe(Vector2(-48, -48), "right")
+	harness.assert_equal(controller.tutorial_step, 2, "movement tutorial should require the opposite X swipe")
+	harness.assert_equal(controller.run_state.current_piece["origin"], origin_before, "opposite movement should bring the live piece back across the X axis")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "MOVE DOWN-LEFT", "tutorial should then teach the first Z movement")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↙", "tutorial should show the correct diagonal for moving back")
+
+	controller._handle_tutorial_swipe(Vector2(-48, 48), "right")
+	harness.assert_equal(controller.tutorial_step, 3, "movement tutorial should advance on the back swipe")
+	harness.assert_equal(controller.run_state.current_piece["origin"], origin_before + Vector3i(0, 0, 1), "tutorial should move the live piece along Z during the movement lesson")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "MOVE UP-RIGHT", "tutorial should then teach the opposite Z movement")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↗", "tutorial should show the correct diagonal for moving forward")
+
+	controller._handle_tutorial_swipe(Vector2(48, -48), "right")
+	harness.assert_equal(controller.tutorial_step, 4, "movement tutorial should require the forward swipe before rotations")
+	harness.assert_equal(controller.run_state.current_piece["name"], "L", "tutorial should reset to the rotation baseline before the first rotation step")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "SWIPE DOWN-LEFT", "tutorial should begin the X rotation pair next")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↙", "tutorial should show the first X rotation swipe")
+	harness.assert_true(controller.run_state.current_piece["blocks"] != movement_blocks_before, "rotation baseline should restore a distinct piece state before rotation lessons")
+
+	controller._handle_tutorial_swipe(Vector2(48, -48), "left")
+	harness.assert_equal(controller.tutorial_step, 4, "wrong X rotation direction should not advance the tutorial")
+
+	var rotation_blocks_before = controller.run_state.current_piece["blocks"].duplicate(true)
+	controller._handle_tutorial_swipe(Vector2(-48, 48), "left")
+	harness.assert_equal(controller.tutorial_step, 5, "tutorial should advance after the first X rotation swipe")
+	harness.assert_true(controller.run_state.current_piece["blocks"] != rotation_blocks_before, "tutorial rotation should visibly change the live piece")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "SWIPE UP-RIGHT", "tutorial should require the opposite X rotation next")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↗", "tutorial should flip the X rotation arrow")
+
+	controller._handle_tutorial_swipe(Vector2(48, -48), "left")
+	harness.assert_equal(controller.tutorial_step, 6, "tutorial should require both X rotation directions")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "SWIPE UP-LEFT", "tutorial should move on to Z rotation")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↖", "tutorial should show the first Z rotation swipe")
+
+	controller._handle_tutorial_swipe(Vector2(-48, -48), "left")
+	harness.assert_equal(controller.tutorial_step, 7, "tutorial should advance after the first Z rotation swipe")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "SWIPE DOWN-RIGHT", "tutorial should require the opposite Z rotation next")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "↘", "tutorial should flip the Z rotation arrow")
+
+	controller._handle_tutorial_swipe(Vector2(48, 48), "left")
+	harness.assert_equal(controller.tutorial_step, 8, "tutorial should require both Z rotation directions")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "ROTATE RIGHT", "tutorial should move on to Y rotation")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "→", "tutorial should show the first Y rotation swipe")
+
+	controller._handle_tutorial_swipe(Vector2(72, 0), "left")
+	harness.assert_equal(controller.tutorial_step, 9, "tutorial should advance after the first Y rotation swipe")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "ROTATE LEFT", "tutorial should require the opposite Y rotation next")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "←", "tutorial should flip the Y rotation arrow")
+
+	controller._handle_tutorial_swipe(Vector2(-72, 0), "left")
+	harness.assert_equal(controller.tutorial_step, 10, "tutorial should require both Y rotation directions")
+	harness.assert_equal(controller.run_state.current_piece["name"], "T", "tutorial should reset to the clean baseline before the drop lesson")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "TAP DROP", "tutorial should then move to the drop button")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "TAP", "tutorial should replace the arrow with a drop cue")
+
+	controller._handle_tutorial_double_tap()
+	harness.assert_equal(controller.tutorial_step, 10, "double tap should not bypass the drop tutorial step")
+
+	controller._button_drop()
+	harness.assert_equal(controller.tutorial_step, 11, "drop tutorial should advance from the drop button")
+	harness.assert_equal(controller.run_state.current_piece["name"], "T", "tutorial should restore the clean baseline after demonstrating the drop")
+	harness.assert_equal(controller.run_state.current_piece["origin"], origin_before, "tutorial should reset to the clean board before the camera lesson")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "DOUBLE TAP TO SWAP", "tutorial should then teach the camera swap")
+	harness.assert_equal(controller.hud_labels["tutorial_hint"].text, "TAP x2", "tutorial should show a compact double-tap cue for tap steps")
+
+	controller._handle_tutorial_double_tap()
+	harness.assert_equal(controller.tutorial_step, 12, "camera tutorial should advance to the start prompt after a double tap")
+	harness.assert_true(controller.camera_transition_active, "camera tutorial should trigger the swap animation")
+	controller._advance_camera_transition(controller.CAMERA_SWAP_DURATION)
+	harness.assert_true(controller.view_flipped, "camera tutorial should leave the view flipped before the start prompt")
+	harness.assert_equal(controller.hud_labels["tutorial_instruction"].text, "DOUBLE TAP TO START", "tutorial should end on the separate start gate")
+	harness.assert_equal(controller.hud_labels["tutorial_progress"].text, "13/13", "tutorial should reach the final progress step before completing")
+
+	controller._handle_tutorial_double_tap()
+	harness.assert_true(controller.camera_transition_active, "final tutorial start should animate back to the front view")
+	harness.assert_true(controller.tutorial_finishing, "tutorial should stay in a finishing state while the return animation runs")
+	harness.assert_true(controller._gameplay_locked(), "gameplay should stay locked until the return animation finishes")
+	controller._advance_camera_transition(controller.CAMERA_SWAP_DURATION)
+	harness.assert_true(not controller.tutorial_active, "tutorial overlay should be gone after the return animation completes")
+	harness.assert_true(controller.tutorial_completed, "tutorial should be marked complete after the animated start handoff")
+	harness.assert_true(not controller.tutorial_finishing, "tutorial finishing state should clear once the camera settles")
+	harness.assert_true(not controller.view_flipped, "final tutorial start should return the camera to the front view")
+	controller.free()
+
+
+static func _test_intro_tutorial_swipe_input_events(harness: RefCounted) -> void:
+	harness.case("intro tutorial swipe input events")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+
+	var right_press := InputEventScreenTouch.new()
+	right_press.pressed = true
+	right_press.position = Vector2(700, 180)
+	controller._input(right_press)
+
+	var right_drag := InputEventScreenDrag.new()
+	right_drag.position = Vector2(748, 228)
+	controller._input(right_drag)
+	controller._process(0.016)
+
+	var right_release := InputEventScreenTouch.new()
+	right_release.pressed = false
+	right_release.position = Vector2(748, 228)
+	controller._input(right_release)
+
+	harness.assert_equal(controller.tutorial_step, 1, "tutorial should advance from the first movement step on a real right-side swipe")
+	harness.assert_true(not controller.touch_active, "touch capture should end after the swipe release is processed")
+
+	controller.tutorial_step = 4
+	controller._refresh_view()
+
+	var left_press := InputEventScreenTouch.new()
+	left_press.pressed = true
+	left_press.position = Vector2(120, 180)
+	controller._input(left_press)
+
+	var left_drag := InputEventScreenDrag.new()
+	left_drag.position = Vector2(72, 228)
+	controller._input(left_drag)
+	controller._process(0.016)
+
+	var left_release := InputEventScreenTouch.new()
+	left_release.pressed = false
+	left_release.position = Vector2(72, 228)
+	controller._input(left_release)
+
+	harness.assert_equal(controller.tutorial_step, 5, "tutorial should advance from the first X rotation step on a real left-side swipe")
+	controller.free()
+
+
+static func _test_next_preview_stage(harness: RefCounted) -> void:
+	harness.case("next preview stage")
+	var controller = ControllerScript.new()
+	var anchor: Vector3 = controller._next_preview_stage_anchor_fallback(controller.CAMERA_NEAR_CORNER)
+	harness.assert_true(anchor.x > controller.BOARD_BOUNDS_MAX.x, "next preview stage should sit to the right of the board bounds")
+	controller._ready()
+	controller._finish_startup()
+	controller._dismiss_tutorial_for_automation()
+	harness.assert_true(controller.next_preview_root != null, "next preview stage root should exist in the main scene")
+	harness.assert_true(controller.next_preview_piece_root.get_child_count() > 0, "next preview stage should render the upcoming piece in the main scene")
 	controller.free()
 
 
@@ -173,14 +361,143 @@ static func _test_button_layout_metrics(harness: RefCounted) -> void:
 	var metrics := controller.hud_layout_metrics(Vector2(844, 390))
 	var dock_rect: Rect2 = metrics["button_dock_rect"]
 	var button_height: float = metrics["button_height"]
-	var button_gap: float = metrics["button_gap"]
 	var button_padding: float = metrics["button_dock_padding"]
 	var button_width := dock_rect.size.x - button_padding * 2.0
 	harness.assert_true(button_width >= 120.0, "full-width button layout should give labels enough horizontal room")
 	harness.assert_true(
-		dock_rect.size.y >= button_height * 2.0 + button_gap + button_padding * 2.0,
-		"button dock should reserve enough height for two stacked buttons"
+		absf(dock_rect.size.y - (button_height + button_padding * 2.0)) < 0.01,
+		"button dock should reserve space for the single drop action"
 	)
+	controller.free()
+
+
+static func _test_hud_menu_actions(harness: RefCounted) -> void:
+	harness.case("hud menu actions")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+	controller._dismiss_tutorial_for_automation()
+	var menu_button: Button = controller.hud_labels["button_menu"]
+	harness.assert_equal(menu_button.text, "MENU", "hud should expose a menu button for secondary actions")
+	controller._open_pause_board()
+	harness.assert_true(controller.pause_board_open, "opening the menu should show the pause board")
+	harness.assert_true(controller._gameplay_locked(), "pause board should block gameplay while open")
+	controller.run_state.score = 123
+	controller._close_pause_board()
+	harness.assert_true(not controller.pause_board_open, "resume should close the pause board")
+	harness.assert_equal(controller.run_state.score, 123, "resume should preserve run state")
+	controller._open_pause_board()
+	harness.assert_true(controller.pause_board_open, "menu should reopen after resume")
+	controller.run_state.score = 123
+	controller._button_new_run()
+	harness.assert_equal(controller.run_state.score, 0, "new run menu action should reset the run")
+	harness.assert_true(not controller.pause_board_open, "new run should close the pause board")
+	controller.free()
+
+
+static func _test_hud_menu_layout(harness: RefCounted) -> void:
+	harness.case("hud menu layout")
+	var controller = ControllerScript.new()
+	var metrics := controller.hud_layout_metrics(Vector2(844, 390))
+	var title_rect: Rect2 = metrics["title_rect"]
+	var title_text_rect: Rect2 = metrics["title_text_rect"]
+	var menu_rect: Rect2 = metrics["menu_rect"]
+	var stats_rect: Rect2 = metrics["stats_rect"]
+	var queue_rect: Rect2 = metrics["queue_rect"]
+	var queue_title_rect: Rect2 = metrics["queue_title_rect"]
+	var queue_preview_frame_rect: Rect2 = metrics["queue_preview_frame_rect"]
+	var queue_preview_rect: Rect2 = metrics["queue_preview_rect"]
+	var pause_board_rect: Rect2 = metrics["pause_board_rect"]
+	var pause_inner_rect: Rect2 = metrics["pause_inner_rect"]
+	var pause_subtitle_rect: Rect2 = metrics["pause_subtitle_rect"]
+	var pause_divider_rect: Rect2 = metrics["pause_divider_rect"]
+	var pause_button_resume_rect: Rect2 = metrics["pause_button_resume_rect"]
+	var pause_button_new_run_rect: Rect2 = metrics["pause_button_new_run_rect"]
+	var tutorial_focus_rect: Rect2 = metrics["tutorial_focus_rect"]
+	var tutorial_caption_rect: Rect2 = metrics["tutorial_caption_rect"]
+	var tutorial_instruction_rect: Rect2 = metrics["tutorial_instruction_rect"]
+	var tutorial_hint_rect: Rect2 = metrics["tutorial_hint_rect"]
+	var tutorial_helper_rect: Rect2 = metrics["tutorial_helper_rect"]
+	var tutorial_progress_rect: Rect2 = metrics["tutorial_progress_rect"]
+	var tutorial_dim_left_rect: Rect2 = metrics["tutorial_dim_left_rect"]
+	var tutorial_dim_right_rect: Rect2 = metrics["tutorial_dim_right_rect"]
+	var tutorial_dim_top_rect: Rect2 = metrics["tutorial_dim_top_rect"]
+	var tutorial_dim_bottom_rect: Rect2 = metrics["tutorial_dim_bottom_rect"]
+	var play_rect: Rect2 = metrics["play_rect"]
+	var dock_rect: Rect2 = metrics["button_dock_rect"]
+	harness.assert_true(menu_rect.intersects(title_rect), "menu trigger should live within the title rail")
+	harness.assert_true(not menu_rect.intersects(title_text_rect), "menu trigger should not overlap the title text")
+	harness.assert_true(menu_rect.position.x >= title_text_rect.end.x, "menu trigger should sit to the right of the title")
+	harness.assert_true(menu_rect.size.x <= 48.0, "menu trigger should stay compact relative to the title rail")
+	harness.assert_true(title_text_rect.size.x > menu_rect.size.x, "title text should remain more prominent than the menu trigger")
+	harness.assert_true(menu_rect.end.y <= stats_rect.position.y, "menu trigger should clear the stats panel")
+	harness.assert_true(absf(queue_rect.size.x - dock_rect.size.x) < 0.01, "next rail should match the drop dock width")
+	harness.assert_true(not queue_title_rect.intersects(queue_preview_frame_rect), "next title should have its own row above the featured preview frame")
+	harness.assert_true(queue_rect.encloses(queue_preview_frame_rect), "featured next-piece frame should stay inside the queue rail")
+	harness.assert_true(queue_preview_frame_rect.encloses(queue_preview_rect), "next-piece blocks should stay inside the featured preview frame")
+	harness.assert_true(queue_preview_frame_rect.size.y > queue_rect.size.y * 0.7, "next preview should use most of the top-right rail height")
+	harness.assert_true(absf(pause_board_rect.get_center().x - 422.0) < 1.0, "pause board should remain horizontally centered on the phone baseline")
+	harness.assert_true(absf(pause_board_rect.get_center().y - 195.0) < 1.0, "pause board should remain vertically centered on the phone baseline")
+	harness.assert_true(pause_board_rect.size.x >= 320.0, "pause board should be much wider for mobile taps")
+	harness.assert_true(pause_board_rect.size.y >= 250.0, "pause board should be much taller for mobile taps")
+	harness.assert_true(pause_board_rect.encloses(pause_inner_rect), "pause board should maintain an inner frame for retro framing")
+	harness.assert_true(not pause_subtitle_rect.intersects(pause_divider_rect), "pause subtitle should keep a dedicated lane above the divider")
+	harness.assert_true(pause_divider_rect.end.y <= pause_button_resume_rect.position.y, "pause divider should sit above the first button with explicit clearance")
+	harness.assert_true(pause_inner_rect.encloses(pause_button_resume_rect), "pause inner frame should fully contain the resume button")
+	harness.assert_true(pause_inner_rect.encloses(pause_button_new_run_rect), "pause inner frame should fully contain the new run button")
+	harness.assert_true(pause_button_resume_rect.size.y >= 44.0, "resume button should become a finger-friendly touch target")
+	harness.assert_true(pause_button_new_run_rect.size.y >= 44.0, "new run button should become a finger-friendly touch target")
+	harness.assert_true(tutorial_focus_rect.position.x >= 422.0, "movement tutorial should highlight the right side by default")
+	harness.assert_true(tutorial_caption_rect.end.x <= tutorial_focus_rect.position.x, "tutorial caption should stay in the dimmed area opposite the focus zone")
+	harness.assert_true(tutorial_focus_rect.encloses(tutorial_hint_rect), "tutorial glyph should stay inside the highlighted focus zone")
+	harness.assert_true(not tutorial_caption_rect.intersects(tutorial_focus_rect), "tutorial caption should not overlap the highlighted focus zone")
+	harness.assert_true(not tutorial_instruction_rect.intersects(tutorial_progress_rect), "tutorial prompt should clear the progress lane inside the caption")
+	harness.assert_true(tutorial_dim_left_rect.size.x > 0.0, "tutorial should dim the unfocused left side during right-side steps")
+	harness.assert_true(tutorial_dim_right_rect.size.x <= 14.0, "tutorial should only leave the outer edge margin dimmed on the active side")
+	harness.assert_true(tutorial_dim_top_rect.size.y >= 0.0 and tutorial_dim_bottom_rect.size.y >= 0.0, "tutorial should expose top and bottom dim bands as needed")
+	controller.tutorial_step = 10
+	var drop_metrics := controller.hud_layout_metrics(Vector2(844, 390))
+	var drop_focus_rect: Rect2 = drop_metrics["tutorial_focus_rect"]
+	harness.assert_true(drop_focus_rect.intersects(dock_rect), "drop tutorial should spotlight the drop dock")
+	controller.tutorial_step = 11
+	var tap_metrics := controller.hud_layout_metrics(Vector2(844, 390))
+	var tap_focus_rect: Rect2 = tap_metrics["tutorial_focus_rect"]
+	harness.assert_true(play_rect.encloses(tap_focus_rect), "double-tap tutorial should spotlight only the play area")
+	controller.free()
+
+
+static func _test_pause_board_blocks_gameplay(harness: RefCounted) -> void:
+	harness.case("pause board blocks gameplay")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+	controller._dismiss_tutorial_for_automation()
+	controller.run_state.set_board_cells_for_test([])
+	controller.run_state.set_active_piece_for_test("T", Vector3i(4, 18, 4))
+	var origin_before: Vector3i = controller.run_state.current_piece["origin"]
+	controller._open_pause_board()
+	controller._request_move(Vector3i(-1, 0, 0))
+	controller._button_drop()
+	harness.assert_equal(controller.run_state.current_piece["origin"], origin_before, "pause board should block movement and drop actions")
+	controller.free()
+
+
+static func _test_scoreboard_labels(harness: RefCounted) -> void:
+	harness.case("scoreboard labels")
+	var controller = ControllerScript.new()
+	controller._ready()
+	controller._finish_startup()
+	controller._dismiss_tutorial_for_automation()
+	controller.run_state.score = 42
+	controller.run_state.level = 3
+	controller.run_state.cleared_rows_total = 7
+	controller._refresh_labels()
+
+	harness.assert_true(not controller.hud_labels["info"].visible, "legacy multiline info label should stay hidden")
+	harness.assert_equal(controller.hud_labels["score_header"].text, "SCORE", "scoreboard should render a score header")
+	harness.assert_equal(controller.hud_labels["score_value"].text, "000042", "scoreboard should zero-pad score values")
+	harness.assert_equal(controller.hud_labels["level_value"].text, "03", "scoreboard should zero-pad level values")
+	harness.assert_equal(controller.hud_labels["lines_value"].text, "007", "scoreboard should zero-pad line totals")
 	controller.free()
 
 
@@ -188,6 +505,7 @@ static func _test_visual_scenarios(harness: RefCounted) -> void:
 	harness.case("visual scenarios")
 	var controller = ControllerScript.new()
 	controller._ready()
+	controller._finish_startup()
 
 	harness.assert_true(controller.prepare_visual_scenario("default"), "default scenario should load")
 	harness.assert_true(not controller.run_state.current_piece.is_empty(), "default scenario should have an active piece")
@@ -208,6 +526,23 @@ static func _test_visual_scenarios(harness: RefCounted) -> void:
 
 	harness.assert_true(controller.prepare_visual_scenario("game_over"), "game over scenario should load")
 	harness.assert_true(controller.run_state.game_over, "game over scenario should mark the run as over")
+
+	harness.assert_true(controller.prepare_visual_scenario("tutorial_move"), "tutorial move scenario should load")
+	harness.assert_true(controller.tutorial_active, "tutorial move scenario should restore the tutorial overlay")
+	harness.assert_equal(controller.tutorial_step, 0, "tutorial move scenario should land on the first tutorial step")
+
+	harness.assert_true(controller.prepare_visual_scenario("tutorial_rotate"), "tutorial rotate scenario should load")
+	harness.assert_true(controller.tutorial_active, "tutorial rotate scenario should keep the tutorial visible")
+	harness.assert_equal(controller.tutorial_step, 5, "tutorial rotate scenario should land on a mid-rotation step")
+
+	harness.assert_true(controller.prepare_visual_scenario("tutorial_drop"), "tutorial drop scenario should load")
+	harness.assert_true(controller.tutorial_active, "tutorial drop scenario should keep the tutorial visible")
+	harness.assert_equal(controller.tutorial_step, 10, "tutorial drop scenario should land on the drop step")
+
+	harness.assert_true(controller.prepare_visual_scenario("tutorial_start"), "tutorial start scenario should load")
+	harness.assert_true(controller.tutorial_active, "tutorial start scenario should keep the tutorial visible")
+	harness.assert_true(controller.view_flipped, "tutorial start scenario should stage the final start step from the flipped view")
+	harness.assert_equal(controller.tutorial_step, controller.TUTORIAL_STEP_COUNT - 1, "tutorial start scenario should land on the final tutorial step")
 
 	harness.assert_true(not controller.prepare_visual_scenario("unknown"), "unknown visual scenarios should fail cleanly")
 	controller.free()
@@ -311,6 +646,16 @@ static func _test_left_swipe_angle_threshold(harness: RefCounted) -> void:
 		InputActionMapScript.action_for_swipe(Vector2(60, 35)),
 		InputActionMapScript.ROTATE_Z_CCW,
 		"shallower diagonals should now fall through to the diagonal rotation mapping"
+	)
+	harness.assert_equal(
+		InputActionMapScript.action_for_swipe(Vector2(70, 34)),
+		InputActionMapScript.ROTATE_Z_CCW,
+		"moderate diagonals near the old boundary should now prefer Z over accidental Y"
+	)
+	harness.assert_equal(
+		InputActionMapScript.action_for_swipe(Vector2(88, 30)),
+		InputActionMapScript.ROTATE_Y_CW,
+		"clearly flatter swipes should still remain on Y after the threshold change"
 	)
 	harness.assert_equal(
 		InputActionMapScript.action_for_swipe(Vector2(-60, -35)),

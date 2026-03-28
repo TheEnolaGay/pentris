@@ -4,7 +4,7 @@ extends RefCounted
 const PieceLibraryScript = preload("res://scripts/core/piece_library.gd")
 
 var board_size: Vector3i
-var visible_queue: int = 4
+var visible_queue: int = 1
 var kick_offsets: Array[Vector3i] = [
 	Vector3i(0, 0, 0),
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),

@@ -51,10 +51,18 @@ Canonical command:
 ./scripts/build_web.sh
 ```
 
+This now defaults to a release build and should be the normal path for real phone testing.
+
 Release build:
 
 ```bash
 ./scripts/build_web.sh release
+```
+
+Debug build:
+
+```bash
+./scripts/build_web.sh debug
 ```
 
 Use when:
@@ -62,6 +70,7 @@ Use when:
 - validating touch behavior on a real phone
 - checking mobile layout in a browser
 - sharing a quick test build on the local network
+- checking realistic mobile load behavior with the default repo workflow
 
 Expected artifact:
 
@@ -137,6 +146,39 @@ Known prerequisites:
 Source of truth:
 
 - [serve_web_https.sh](/home/bockscar/Git/pentris/scripts/serve_web_https.sh)
+
+## Deploy To Cloudflare Pages
+
+Goal: let Cloudflare Pages build the Godot Web export from the repo and serve `build/web` automatically on each push to `main`.
+
+Canonical workflow:
+
+- Pages build script: [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh)
+
+Use when:
+
+- preparing the repo for hosted Web deployment
+- releasing the current `main` branch to a stable Pages URL
+- verifying that Cloudflare deploy steps still match the Godot export workflow
+
+Cloudflare Pages settings:
+
+- production branch: `main`
+- build command: `bash scripts/build_pages.sh`
+- build output directory: `build/web`
+- root directory: repo root
+
+Local parity commands:
+
+```bash
+./scripts/build_pages.sh
+```
+
+Success signal:
+
+- the Pages build script passes the headless suite
+- `build/web/index.html` is generated
+- Cloudflare Pages serves the generated Web bundle from the connected project
 
 ## Run Logic And Controller Tests
 
@@ -234,6 +276,55 @@ Underlying harness:
 
 - [tools/visual_capture_runner.gd](/home/bockscar/Git/pentris/tools/visual_capture_runner.gd)
 
+## Run Scripted Visual Playtests
+
+Goal: drive a deterministic action sequence, save multiple checkpoint frames, and emit a report that shows which gameplay and HUD actions were visually exercised.
+
+Canonical command:
+
+```bash
+./scripts/run_visual_playtest.sh full_action_sweep
+```
+
+Custom preset, output path, seed, or fps:
+
+```bash
+./scripts/run_visual_playtest.sh line_clear_flow desktop_720p
+./scripts/run_visual_playtest.sh hud_restart_flow phone_landscape output/visual-playtests/custom/hud_restart 9 24
+```
+
+Use when:
+
+- validating many player actions in one pass
+- checking visual transitions or HUD flows that are too broad for single PNG scenarios
+- producing review artifacts that show progression rather than one frozen moment
+
+Notes:
+
+- The launch tutorial now appears on normal app startup.
+- Scripted visual playtests automatically dismiss that tutorial before running their action scripts.
+
+Expected artifacts:
+
+- ordered PNG frames under `output/visual-playtests/<preset>/<script_name>/`
+- `report.json`
+- `report.txt`
+
+Canonical script:
+
+- [run_visual_playtest.sh](/home/bockscar/Git/pentris/scripts/run_visual_playtest.sh)
+
+Underlying harness:
+
+- [visual_playtest_runner.gd](/home/bockscar/Git/pentris/tools/visual_playtest_runner.gd)
+- [visual_playtest_executor.gd](/home/bockscar/Git/pentris/scripts/ui/visual_playtest_executor.gd)
+
+Available scripted playtests:
+
+- `full_action_sweep`: movement, all rotation families, hold, hard drop, HUD drop button, view flip, menu restart, line clear, and game over checkpoints
+- `line_clear_flow`: line-clear pause and post-clear respawn checkpoints
+- `hud_restart_flow`: HUD drop button, pause-board resume, and menu restart flow checkpoints
+
 ## Available Visual Scenarios
 
 Source of truth:
@@ -248,6 +339,14 @@ Scenarios:
 - `line_clear_pause`: line-clear freeze-frame and status behavior
 - `flipped_camera`: flipped-view composition and wall visibility
 - `game_over`: blocked-spawn and end-state HUD behavior
+- `tutorial_move`: first tutorial movement step for prompt and arrow placement
+- `tutorial_rotate`: mid-tutorial rotation step for prompt and arrow review
+- `tutorial_drop`: drop-step spotlight for button-only tutorial review
+- `tutorial_start`: final tutorial start step staged from the flipped view
+
+Notes:
+
+- `prepare_visual_scenario()` dismisses the launch tutorial automatically so captures land in the requested gameplay state.
 
 ## Recommended Validation Pattern
 
@@ -260,7 +359,8 @@ Use this order unless the task clearly needs something else:
    - `flipped_camera` for camera-side or transparency changes
    - `line_clear_pause` or `game_over` for status-state UI changes
 4. If the change affects feel rather than static output, use `godot4 --path .` for manual inspection.
-5. For real mobile touch validation, run `./scripts/build_web.sh`.
-6. Use `./scripts/serve_web.sh` only for plain LAN smoke tests.
-7. Use `./scripts/serve_web_https.sh` when the phone must satisfy secure-context browser checks.
-8. Before milestone commits or tags, run `git status --short`, verify `VERSION`/`CHANGELOG.md`, and rerun the headless suite.
+5. If the change affects multiple action categories or a broader flow, run `./scripts/run_visual_playtest.sh full_action_sweep`.
+6. For real mobile touch validation, run `./scripts/build_web.sh`.
+7. Use `./scripts/serve_web.sh` only for plain LAN smoke tests.
+8. Use `./scripts/serve_web_https.sh` when the phone must satisfy secure-context browser checks.
+9. Before milestone commits or tags, run `git status --short`, verify `VERSION`/`CHANGELOG.md`, and rerun the headless suite.

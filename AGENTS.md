@@ -4,6 +4,8 @@
 
 `scenes/` contains Godot scenes, with `main.tscn` as the runtime entrypoint. `scripts/` holds gameplay and controller code; core rules and state live under `scripts/core/`, while UI-specific helpers live under `scripts/ui/`. `tests/` contains the custom GDScript test harness and suites such as `controller_input_suite.gd` and `ghost_drop_suite.gd`. `tools/` contains developer utilities like the visual capture runner. Runtime assets belong in `assets/`, and generated screenshots belong under `output/visual-checks/`.
 
+For HUD, menu, layout, or other visual polish work, follow the repo style guide in `docs/codex/visual-style-guide.md`. The target presentation is NES Tetris-inspired, retro, and designed primarily for landscape mobile play. Treat the guide as a UI composition contract as well as a visual one: title lanes, action lanes, dividers, captions, and framed content areas must have explicit non-overlapping space.
+
 ## Build, Test, and Development Commands
 
 - `godot4 --path .`: open the project for interactive development.
@@ -24,8 +26,8 @@ Use GDScript with tabs for indentation, matching the existing files. Keep `class
 
 ## Testing Guidelines
 
-Tests use the in-repo harness in `tests/test_harness.gd`; add new cases to the relevant suite and register them from `tests/test_runner.gd`. Name test helpers descriptively, e.g. `_test_camera_swap_transition`. For rendering or HUD changes, run the headless suite first, then capture at least `default` plus a scenario that matches the change such as `ghost` or `flipped_camera`.
+Tests use the in-repo harness in `tests/test_harness.gd`; add new cases to the relevant suite and register them from `tests/test_runner.gd`. Name test helpers descriptively, e.g. `_test_camera_swap_transition`. For rendering or HUD changes, run the headless suite first, then capture at least `default` plus a scenario that matches the change such as `ghost` or `flipped_camera`. If the change affects a broader HUD or interaction flow, also run the scripted visual playtest that best matches it. Use `docs/codex/visual-style-guide.md` as the review checklist for spacing, hierarchy, panel composition, and mobile-landscape balance before calling the work done.
 
 ## Commit & Pull Request Guidelines
 
-Use Conventional Commits by default (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Keep subjects concise and action-oriented. `VERSION` is the canonical repo version, `CHANGELOG.md` tracks released milestones, and release tags use the `vX.Y.Z` form. Pull requests should summarize gameplay or UI impact, list validation commands run, and include updated screenshots for any visual change. If scripts, scenarios, controls, or validation workflows change, update `docs/codex/` in the same PR.
+Use Conventional Commits by default (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`). Keep subjects concise and action-oriented. `VERSION` is the canonical repo version, `CHANGELOG.md` tracks released milestones, and release tags use the `vX.Y.Z` form. Pull requests should summarize gameplay or UI impact, list validation commands run, and include updated screenshots for any visual change. If scripts, scenarios, controls, validation workflows, or the visual style contract change, update `docs/codex/` in the same PR.

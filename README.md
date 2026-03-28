@@ -58,6 +58,29 @@ For browser features that require a secure context on the phone, use HTTPS inste
 
 Open the printed `https://...` tunnel URL on the phone. Plain LAN URLs such as `http://192.168.x.x:8060` are useful for basic layout/input smoke testing, but they do not satisfy secure-context checks.
 
+## Cloudflare Pages Deployment
+
+This repo is prepared for Cloudflare Pages deployment through Cloudflare's Git integration. The deployable site is the Godot Web export in `build/web/`, so the Pages project should build the export inside the Pages build environment and then serve that generated folder.
+
+One-time setup:
+
+1. Create a Cloudflare Pages project in the dashboard.
+2. Connect this GitHub repo.
+3. Use these Pages build settings:
+   - Production branch: `main`
+   - Build command: `bash scripts/build_pages.sh`
+   - Build output directory: `build/web`
+   - Root directory: repo root
+4. Save the project and let Pages build on each push to `main`.
+
+The Pages build script downloads Godot 4.5 and export templates automatically when the build environment does not already provide `godot4`. It then runs the repo's headless test suite before exporting the Web build.
+
+For a local preflight that mirrors the Pages build logic:
+
+```bash
+./scripts/build_pages.sh
+```
+
 ## Git Workflow
 
 - Use Conventional Commits by default: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.

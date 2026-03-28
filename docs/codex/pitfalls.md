@@ -75,6 +75,24 @@ Correct workflow:
 - then run `./scripts/serve_web.sh`
 - open the printed LAN URL on the phone browser
 
+## Debug Web Exports Exaggerate Mobile Load-Time Pain
+
+Symptom:
+
+- phone startup feels slower than expected
+- load-time comparisons are based on a heavier debug build
+
+Root cause:
+
+- debug Web exports are useful for diagnosis, but they are not the best baseline for real mobile startup checks
+- this repo now treats release export as the default `build_web.sh` behavior
+
+Correct workflow:
+
+- use `./scripts/build_web.sh` for normal phone testing
+- use `./scripts/build_web.sh debug` only when actively debugging browser-side issues
+- judge mobile load time primarily from the release build
+
 ## LAN HTTP On A Phone Is Not A Secure Context
 
 Symptom:
@@ -92,3 +110,20 @@ Correct workflow:
 - keep `./scripts/serve_web.sh` for quick LAN smoke tests
 - use `./scripts/serve_web_https.sh` for secure-context mobile testing
 - open the printed `https://...` URL on the phone
+
+## Do Not Split Cloudflare Pages Between Two Deployment Systems
+
+Symptom:
+
+- Pages deploy behavior is ambiguous because both Cloudflare Git builds and a separate GitHub-side deploy path are configured
+
+Root cause:
+
+- this repo should have one authoritative deployment system
+- mixing dashboard Git builds with a second upload pipeline makes failures harder to attribute and review
+
+Correct workflow:
+
+- use [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh) as the Cloudflare Pages build command
+- keep the Pages project pointed at `build/web`
+- if deployment behavior changes, update `README.md` and `docs/codex/workflows.md` in the same task

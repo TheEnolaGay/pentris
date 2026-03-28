@@ -13,7 +13,7 @@ const ROTATE_X_CW := "rotate_x_cw"
 const ROTATE_X_CCW := "rotate_x_ccw"
 const ROTATE_Z_CW := "rotate_z_cw"
 const ROTATE_Z_CCW := "rotate_z_ccw"
-const ROTATE_Y_SWIPE_AXIS_RATIO := 1.75
+const ROTATE_Y_SWIPE_AXIS_RATIO := 2.1
 
 
 static func ensure_default_actions() -> void:
