@@ -154,6 +154,8 @@ Goal: let Cloudflare Pages build the Godot Web export from the repo and serve `b
 Canonical workflow:
 
 - Pages build script: [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh)
+- Template build script: [scripts/build_custom_web_templates.sh](/home/bockscar/Git/pentris/scripts/build_custom_web_templates.sh)
+- Template publish workflow: [.github/workflows/publish-godot-web-templates.yml](/home/bockscar/Git/pentris/.github/workflows/publish-godot-web-templates.yml)
 
 Use when:
 
@@ -174,11 +176,25 @@ Local parity commands:
 ./scripts/build_pages.sh
 ```
 
+Template publishing flow:
+
+```bash
+./scripts/build_custom_web_templates.sh
+```
+
+Use the `Publish Godot Web Templates` workflow when:
+
+- the default custom template release tag changes
+- the Godot version changes
+- module stripping rules change
+- Cloudflare Pages still rejects `index.wasm` for size and the custom template needs another reduction pass
+
 Success signal:
 
 - the Pages build script passes the headless suite
 - `build/web/index.html` is generated
 - Cloudflare Pages serves the generated Web bundle from the connected project
+- `build/web/index.wasm` stays below the platform file-size limit because the pinned custom templates are in use
 
 ## Run Logic And Controller Tests
 

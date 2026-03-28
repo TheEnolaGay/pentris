@@ -73,7 +73,13 @@ One-time setup:
    - Root directory: repo root
 4. Save the project and let Pages build on each push to `main`.
 
-The Pages build script reuses `godot4` when the build environment already provides it, and it installs the matching Godot 4.5 export templates whenever they are missing. It then runs the repo's headless test suite before exporting the Web build.
+The Pages build script reuses `godot4` when the build environment already provides it, then downloads the pinned custom reduced-size Godot 4.5 Web templates from this repo's GitHub Releases when they are missing. It then runs the repo's headless test suite before exporting the Web build.
+
+Before the first successful Pages deploy for a new template version, publish the custom template artifact:
+
+1. Run the GitHub Actions workflow `Publish Godot Web Templates`.
+2. Keep the release tag aligned with the default `PENTRIS_TEMPLATE_TAG` in `scripts/build_pages.sh`, or update that variable in the repo before pushing.
+3. After the release exists, Pages can fetch the custom templates during its normal Git build.
 
 For a local preflight that mirrors the Pages build logic:
 

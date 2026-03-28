@@ -127,3 +127,20 @@ Correct workflow:
 - use [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh) as the Cloudflare Pages build command
 - keep the Pages project pointed at `build/web`
 - if deployment behavior changes, update `README.md` and `docs/codex/workflows.md` in the same task
+
+## Stock Godot Web Templates Are Too Large For Cloudflare Pages
+
+Symptom:
+
+- Cloudflare Pages finishes the Godot export, then rejects `index.wasm` because it exceeds the 25 MiB file-size limit
+
+Root cause:
+
+- the stock Godot 4.5 Web export template produces a larger `index.wasm` than Cloudflare Pages accepts for this project
+- Pages can build the project, but asset validation fails after export
+
+Correct workflow:
+
+- publish the pinned custom template artifact with [.github/workflows/publish-godot-web-templates.yml](/home/bockscar/Git/pentris/.github/workflows/publish-godot-web-templates.yml)
+- keep [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh) pointed at that pinned release asset
+- if the custom template changes, update the tag defaults in the repo and push them before expecting Pages to use the new artifact
