@@ -73,7 +73,7 @@ One-time setup:
    - Root directory: repo root
 4. Save the project and let Pages build on each push to `main`.
 
-The Pages build script downloads Godot 4.5 and export templates automatically when the build environment does not already provide `godot4`. It then runs the repo's headless test suite before exporting the Web build.
+The Pages build script reuses `godot4` when the build environment already provides it, and it installs the matching Godot 4.5 export templates whenever they are missing. It then runs the repo's headless test suite before exporting the Web build.
 
 For a local preflight that mirrors the Pages build logic:
 
