@@ -6,10 +6,7 @@ godot_bin="${GODOT_BIN:-}"
 godot_version="${GODOT_VERSION:-4.5-stable}"
 godot_version_dir="${GODOT_VERSION_DIR:-4.5.stable}"
 template_dir="$HOME/.local/share/godot/export_templates/$godot_version_dir"
-template_repo="${PENTRIS_TEMPLATE_REPO:-TheEnolaGay/pentris}"
-template_tag="${PENTRIS_TEMPLATE_TAG:-godot-web-template-4.5-stable-pentris-v1}"
-template_asset="${PENTRIS_TEMPLATE_ASSET:-pentris-godot-web-templates-${template_tag}.tar.gz}"
-template_checksum_asset="${PENTRIS_TEMPLATE_CHECKSUM_ASSET:-pentris-godot-web-templates-${template_tag}.sha256}"
+repo_template_dir="$repo_root/tools/godot-export-templates/$godot_version_dir"
 
 templates_installed() {
 	[ -f "$template_dir/web_nothreads_debug.zip" ] && [ -f "$template_dir/web_nothreads_release.zip" ]
@@ -34,46 +31,21 @@ download_file() {
 }
 
 install_godot_templates() {
-	local archive_path="/tmp/$template_asset"
-	local checksum_path="/tmp/$template_checksum_asset"
-	local extract_root="/tmp/pentris-pages-templates-$template_tag"
-	local asset_url="https://github.com/${template_repo}/releases/download/${template_tag}/${template_asset}"
-	local checksum_url="https://github.com/${template_repo}/releases/download/${template_tag}/${template_checksum_asset}"
-
 	if templates_installed; then
 		return
 	fi
 
-	if ! command -v tar >/dev/null 2>&1; then
-		echo "missing dependency: tar" >&2
+	if [ ! -f "$repo_template_dir/web_nothreads_debug.zip" ] || [ ! -f "$repo_template_dir/web_nothreads_release.zip" ]; then
+		echo "missing committed custom templates under $repo_template_dir" >&2
 		exit 1
 	fi
-
-	if ! command -v sha256sum >/dev/null 2>&1; then
-		echo "missing dependency: sha256sum" >&2
-		exit 1
-	fi
-
-	rm -rf "$extract_root"
-	download_file "$asset_url" "$archive_path"
-	download_file "$checksum_url" "$checksum_path"
-
-	expected_checksum="$(tr -d ' \n\r' < "$checksum_path")"
-	actual_checksum="$(sha256sum "$archive_path" | awk '{print $1}')"
-	if [ "$expected_checksum" != "$actual_checksum" ]; then
-		echo "custom template checksum mismatch for $template_asset" >&2
-		exit 1
-	fi
-
-	mkdir -p "$extract_root"
-	tar -C "$extract_root" -xzf "$archive_path"
 
 	rm -rf "$template_dir"
 	mkdir -p "$template_dir"
-	cp -R "$extract_root/." "$template_dir/"
+	cp -R "$repo_template_dir/." "$template_dir/"
 
 	if ! templates_installed; then
-		echo "custom template archive did not install the expected web_nothreads templates" >&2
+		echo "committed custom templates did not install the expected web_nothreads templates" >&2
 		exit 1
 	fi
 }

@@ -141,6 +141,6 @@ Root cause:
 
 Correct workflow:
 
-- publish the pinned custom template artifact with [.github/workflows/publish-godot-web-templates.yml](/home/bockscar/Git/pentris/.github/workflows/publish-godot-web-templates.yml)
-- keep [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh) pointed at that pinned release asset
-- if the custom template changes, update the tag defaults in the repo and push them before expecting Pages to use the new artifact
+- keep the committed custom templates under [tools/godot-export-templates](/home/bockscar/Git/pentris/tools/godot-export-templates)
+- keep [scripts/build_pages.sh](/home/bockscar/Git/pentris/scripts/build_pages.sh) pointed at the committed template directory
+- if the custom template changes, regenerate the committed files and push them with the related script/doc updates
